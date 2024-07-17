@@ -53,7 +53,7 @@ export class ReactiveEffect<T = any> {
    * @internal
    */
   _trackId = 0
-  /**
+  /** 当前正在运行的变更
    * @internal
    */
   _runnings = 0
@@ -110,7 +110,7 @@ export class ReactiveEffect<T = any> {
     }
     let lastShouldTrack = shouldTrack
     let lastEffect = activeEffect
-    try {
+    try {debugger
       shouldTrack = true
       activeEffect = this
       this._runnings++
@@ -182,9 +182,12 @@ export interface ReactiveEffectRunner<T = any> {
 
 /**
  * Registers the given function to track reactive updates.
+ * 注册给定的函数以跟踪反应性更新。
  *
  * The given function will be run once immediately. Every time any reactive
  * property that's accessed within it gets updated, the function will run again.
+ *
+ * 给定的函数将立即运行一次。每次更新其中访问的任何reactive属性时，该函数都会再次运行。
  *
  * @param fn - The function that will track reactive updates.
  * @param options - Allows to control the effect's behaviour.
@@ -193,7 +196,7 @@ export interface ReactiveEffectRunner<T = any> {
 export function effect<T = any>(
   fn: () => T,
   options?: ReactiveEffectOptions,
-): ReactiveEffectRunner {
+): ReactiveEffectRunner {debugger
   if ((fn as ReactiveEffectRunner).effect instanceof ReactiveEffect) {
     fn = (fn as ReactiveEffectRunner).effect.fn
   }
@@ -223,7 +226,7 @@ export function effect<T = any>(
 export function stop(runner: ReactiveEffectRunner) {
   runner.effect.stop()
 }
-
+// 全局变量 是否需要收集
 export let shouldTrack = true
 export let pauseScheduleStack = 0
 

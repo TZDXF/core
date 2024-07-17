@@ -45,7 +45,7 @@ type RefBase<T> = {
   value: T
 }
 
-export function trackRefValue(ref: RefBase<any>) {
+export function trackRefValue(ref: RefBase<any>) {debugger
   if (shouldTrack && activeEffect) {
     ref = toRaw(ref)
     trackEffect(
@@ -170,11 +170,13 @@ class RefImpl<T> {
   }
 
   get value() {
+    console.log("get value",this._value)
     trackRefValue(this)
     return this._value
   }
 
   set value(newVal) {
+    console.log("set value",this._value, newVal)
     const useDirectValue =
       this.__v_isShallow || isShallow(newVal) || isReadonly(newVal)
     newVal = useDirectValue ? newVal : toRaw(newVal)

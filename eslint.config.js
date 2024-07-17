@@ -15,7 +15,7 @@ const banConstEnum = {
 export default tseslint.config(
   {
     files: ['**/*.js', '**/*.ts', '**/*.tsx'],
-    extends: [tseslint.configs.base],
+    extends: [tseslint.configs.base,'packages/debug/**'],
     plugins: {
       'import-x': importX,
     },

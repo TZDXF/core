@@ -78,7 +78,7 @@ export interface SFCDescriptor {
   template: SFCTemplateBlock | null
   script: SFCScriptBlock | null
   scriptSetup: SFCScriptBlock | null
-  styles: SFCStyleBlock[]
+  styles: SFCStyleBlock[] // style块可以是多个
   customBlocks: SFCBlock[]
   cssVars: string[]
   /**

@@ -22,6 +22,7 @@ import {
   nextTick,
   onMounted,
   openBlock,
+  reactive,
   ref,
   renderSlot,
   useCssVars,
@@ -31,7 +32,7 @@ import {
   withDirectives,
 } from '@vue/runtime-dom'
 import { type SSRContext, renderToString } from '@vue/server-renderer'
-import { PatchFlags } from '@vue/shared'
+import { PatchFlags, normalizeStyle } from '@vue/shared'
 import { vShowOriginalDisplay } from '../../runtime-dom/src/directives/vShow'
 import { expect } from 'vitest'
 
@@ -148,6 +149,15 @@ describe('SSR hydration', () => {
     expect(container.innerHTML).toBe(`<div class="bar">bar</div>`)
   })
 
+  // #7285
+  test('element with multiple continuous text vnodes', async () => {
+    // should no mismatch warning
+    const { container } = mountWithHydration('<div>fooo</div>', () =>
+      h('div', ['fo', createTextVNode('o'), 'o']),
+    )
+    expect(container.textContent).toBe('fooo')
+  })
+
   test('element with elements children', async () => {
     const msg = ref('foo')
     const fn = vi.fn()
@@ -237,6 +247,17 @@ describe('SSR hydration', () => {
     expect(vnode.el.innerHTML).toBe(
       `<!--[--><span>bar</span><!--[--><span class="bar"></span><!--]--><!--]-->`,
     )
+  })
+
+  // #7285
+  test('Fragment (multiple continuous text vnodes)', async () => {
+    // should no mismatch warning
+    const { container } = mountWithHydration('<!--[-->fooo<!--]-->', () => [
+      'fo',
+      createTextVNode('o'),
+      'o',
+    ])
+    expect(container.textContent).toBe('fooo')
   })
 
   test('Teleport', async () => {
@@ -1174,6 +1195,38 @@ describe('SSR hydration', () => {
     expect(p.childNodes.length).toBe(1)
     const text = p.childNodes[0]
     expect(text.nodeType).toBe(3)
+  })
+
+  // #11372
+  test('object style value tracking in prod', async () => {
+    __DEV__ = false
+    try {
+      const style = reactive({ color: 'red' })
+      const Comp = {
+        render(this: any) {
+          return (
+            openBlock(),
+            createElementBlock(
+              'div',
+              {
+                style: normalizeStyle(style),
+              },
+              null,
+              4 /* STYLE */,
+            )
+          )
+        },
+      }
+      const { container } = mountWithHydration(
+        `<div style="color: red;"></div>`,
+        () => h(Comp),
+      )
+      style.color = 'green'
+      await nextTick()
+      expect(container.innerHTML).toBe(`<div style="color: green;"></div>`)
+    } finally {
+      __DEV__ = true
+    }
   })
 
   test('app.unmount()', async () => {

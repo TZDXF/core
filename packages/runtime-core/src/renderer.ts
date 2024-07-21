@@ -58,7 +58,11 @@ import {
   type SuspenseImpl,
   queueEffectWithSuspense,
 } from './components/Suspense'
-import type { TeleportImpl, TeleportVNode } from './components/Teleport'
+import {
+  TeleportEndKey,
+  type TeleportImpl,
+  type TeleportVNode,
+} from './components/Teleport'
 import { type KeepAliveContext, isKeepAlive } from './components/KeepAlive'
 import { isHmrUpdating, registerHMR, unregisterHMR } from './hmr'
 import { type RootHydrateFunction, createHydrationFunctions } from './hydration'
@@ -103,10 +107,7 @@ export interface RendererOptions<
     prevValue: any,
     nextValue: any,
     namespace?: ElementNamespace,
-    prevChildren?: VNode<HostNode, HostElement>[],
     parentComponent?: ComponentInternalInstance | null,
-    parentSuspense?: SuspenseBoundary | null,
-    unmountChildren?: UnmountChildrenFn,
   ): void
   insert(el: HostNode, parent: HostElement, anchor?: HostNode | null): void
   remove(el: HostNode): void
@@ -140,7 +141,7 @@ export interface RendererOptions<
 // functions provided via options, so the internal constraint is really just
 // a generic object.
 export interface RendererNode {
-  [key: string]: any
+  [key: string | symbol]: any
 }
 
 export interface RendererElement extends RendererNode {}
@@ -666,17 +667,7 @@ function baseCreateRenderer(
     if (props) {
       for (const key in props) {
         if (key !== 'value' && !isReservedProp(key)) {
-          hostPatchProp(
-            el,
-            key,
-            null,
-            props[key],
-            namespace,
-            vnode.children as VNode[],
-            parentComponent,
-            parentSuspense,
-            unmountChildren,
-          )
+          hostPatchProp(el, key, null, props[key], namespace, parentComponent)
         }
       }
       /**
@@ -829,6 +820,15 @@ function baseCreateRenderer(
       dynamicChildren = null
     }
 
+    // #9135 innerHTML / textContent unset needs to happen before possible
+    // new children mount
+    if (
+      (oldProps.innerHTML && newProps.innerHTML == null) ||
+      (oldProps.textContent && newProps.textContent == null)
+    ) {
+      hostSetElementText(el, '')
+    }
+
     if (dynamicChildren) {
       patchBlockChildren(
         n1.dynamicChildren!,
@@ -865,15 +865,7 @@ function baseCreateRenderer(
       // (i.e. at the exact same position in the source template)
       if (patchFlag & PatchFlags.FULL_PROPS) {
         // element props contain dynamic keys, full diff needed
-        patchProps(
-          el,
-          n2,
-          oldProps,
-          newProps,
-          parentComponent,
-          parentSuspense,
-          namespace,
-        )
+        patchProps(el, oldProps, newProps, parentComponent, namespace)
       } else {
         // class
         // this flag is matched when the element has dynamic class bindings.
@@ -904,17 +896,7 @@ function baseCreateRenderer(
             const next = newProps[key]
             // #1471 force patch value
             if (next !== prev || key === 'value') {
-              hostPatchProp(
-                el,
-                key,
-                prev,
-                next,
-                namespace,
-                n1.children as VNode[],
-                parentComponent,
-                parentSuspense,
-                unmountChildren,
-              )
+              hostPatchProp(el, key, prev, next, namespace, parentComponent)
             }
           }
         }
@@ -929,15 +911,7 @@ function baseCreateRenderer(
       }
     } else if (!optimized && dynamicChildren == null) {
       // unoptimized, full diff
-      patchProps(
-        el,
-        n2,
-        oldProps,
-        newProps,
-        parentComponent,
-        parentSuspense,
-        namespace,
-      )
+      patchProps(el, oldProps, newProps, parentComponent, namespace)
     }
 
     if ((vnodeHook = newProps.onVnodeUpdated) || dirs) {
@@ -994,11 +968,9 @@ function baseCreateRenderer(
 
   const patchProps = (
     el: RendererElement,
-    vnode: VNode,
     oldProps: Data,
     newProps: Data,
     parentComponent: ComponentInternalInstance | null,
-    parentSuspense: SuspenseBoundary | null,
     namespace: ElementNamespace,
   ) => {
     if (oldProps !== newProps) {
@@ -1011,10 +983,7 @@ function baseCreateRenderer(
               oldProps[key],
               null,
               namespace,
-              vnode.children as VNode[],
               parentComponent,
-              parentSuspense,
-              unmountChildren,
             )
           }
         }
@@ -1026,17 +995,7 @@ function baseCreateRenderer(
         const prev = oldProps[key]
         // defer patching value
         if (next !== prev && key !== 'value') {
-          hostPatchProp(
-            el,
-            key,
-            prev,
-            next,
-            namespace,
-            vnode.children as VNode[],
-            parentComponent,
-            parentSuspense,
-            unmountChildren,
-          )
+          hostPatchProp(el, key, prev, next, namespace, parentComponent)
         }
       }
       if ('value' in newProps) {
@@ -2368,7 +2327,12 @@ function baseCreateRenderer(
     if (__FEATURE_SUSPENSE__ && vnode.shapeFlag & ShapeFlags.SUSPENSE) {
       return vnode.suspense!.next()
     }
-    return hostNextSibling((vnode.anchor || vnode.el)!)
+    const el = hostNextSibling((vnode.anchor || vnode.el)!)
+    // #9071, #9313
+    // teleported content can mess up nextSibling searches during patch so
+    // we need to skip them during nextSibling search
+    const teleportEnd = el && el[TeleportEndKey]
+    return teleportEnd ? hostNextSibling(teleportEnd) : el
   }
 
   let isFlushing = false
